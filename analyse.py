@@ -1,7 +1,11 @@
 import csv
 import re
 
+variants = ['*', 'm', 'a', '°']
+no_of_variants = len(variants)+1
 pair = {'*':'m','m':'*','a':'°', '°':'a'}
+is_normal = re.compile('^[0-9]+$')
+is_special = re.compile('^[0-9]+[m\*a°]$')
 
 def parse_group(group):
     patt = re.compile('^\s*(([0-9]+[am°\*]?\s*,\s*)*[0-9]+[am°\*]?)?\s*$')
@@ -28,8 +32,6 @@ def parse_verse(filename, manuscripts):
         readings = [parse_group(reading) for reading in word if len(parse_group(reading)) > 0  ]
         words.append(readings)
 
-    is_normal = re.compile('^[0-9]+$')
-    is_special = re.compile('^[0-9]+[m\*a°]$')
     for word in words:
         ms_stack = manuscripts.copy()
         for reading in word:
@@ -58,6 +60,17 @@ def parse_manuscripts(filename):
         for row in i:
             ms.append(row)
     return set(ms[0])
+
+
+def ms_order(man):
+    if is_special.match(man) == None:
+        return int(man)*no_of_variants
+    else:
+        return int(man[:-1])*no_of_variants+variants.index(man[-1])+1
+
+def build_table(manuscripts, words):
+    table = [[[0 for x in manuscripts] for y in manuscripts] for z in words]
+    return table
 
 def update_table(table, word):
     pass
