@@ -68,9 +68,37 @@ def ms_order(man):
     else:
         return int(man[:-1])*no_of_variants+variants.index(man[-1])+1
 
-def build_table(manuscripts, words):
-    table = [[[0 for x in manuscripts] for y in manuscripts] for z in words]
+def build_table(words):
+    manuscripts = set()
+    for a in words:
+        for b in a:
+            for c in b:
+                manuscripts.add(c)
+    m_list = list(manuscripts)
+    m_list.sort(key=ms_order)
+    table = [[[0 for x in m_list] for y in m_list] for z in words]
     return table
+
+def natural_numbers_0():
+    num = 0
+    while True:
+        yield num
+        num += 1
+
+
+def populate_table(table, oms,  words):
+    for (word_i, word) in zip(natural_numbers_0(), words):
+        for group in word:
+            cgroup = group.copy()
+            cgroup.sort(key=ms_order)
+            for i in range(0, len(cgroup)):
+                for j in range(i, len(cgroup)):
+                    table[word_i][oms.index(cgroup[i])][oms.index(cgroup[j])] += 1
+    return table
+
+def project_table(table):
+    proj = [[sum([table[x][y][z] for x in range(len(table))]) for y in range(len(table[0]))] for z in range(len(table[0][0]))]
+    return proj
 
 def update_table(table, word):
     pass
