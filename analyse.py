@@ -1,65 +1,163 @@
 import csv
 import re
+import logging
+logger = logging.getLogger('default')
 
+# Possible variant types of manuscripts
 variants = ['*', 'm', 'a', '°']
 no_of_variants = len(variants)+1
 pair = {'*':'m','m':'*','a':'°', '°':'a'}
+
+# The variant type that of each pair that indicates no change / the original text
+default_variants = ['*', '°']
+
 is_normal = re.compile('^[0-9]+$')
 is_special = re.compile('^[0-9]+[m\*a°]$')
 
 def parse_group(group):
+    # Require each group to be in the correct format
     patt = re.compile('^\s*(([0-9]+[am°\*]?\s*,\s*)*[0-9]+[am°\*]?)?\s*$')
     if patt.match(group) == None:
         raise SyntaxError("Group is not in correct format: {grp}".format(grp=group))
-    return [x.strip() for x in group.split(',') if x.strip() != '']
 
+    # Break into tokens
+    literal = [x.strip() for x in group.split(',') if x.strip() != '']
+    logger.debug("Input group: {ig}".format(ig=literal))
+
+    # The first pass will replace any "normal" / untagged manuscripts with the variants.
+    # A second pass will be needed to deal with the case where only a subset of the pairs of variants appear,
+    # however this cannot be done at the group level, it must be done at the word level.
+    first_pass = []
+    for manuscript in literal:
+        if is_normal.match(manuscript) != None:
+            # An undecorated manuscript number indicates that all variants are in the same group.
+            for variant in variants:
+                first_pass.append(manuscript + variant)
+        elif is_special.match(manuscript) != None:
+            first_pass.append(manuscript)
+        else:
+            raise SyntaxError('Bad  manuscript: {man}'.format(man=manuscript))
+    logger.debug("First pass readings: {fp}".format(fp=first_pass))
+    return first_pass
+
+# parse_verse takes a filename and an ordered, decorated list of manuscripts.
 def parse_verse(filename, manuscripts):
     verse = []
     with open(filename, 'r') as cr:
         i = csv.reader(cr, delimiter='/', quotechar='"')
         for row in i:
             verse.append(row)
+
+    # Remove the list of manuscripts to ignore.
     blanks = []
     if verse[-2] == '---' or '\'---':
+        logger.debug("Manuscripts need to be ignored.")
         blanks = parse_group(verse[-1][0])
+        logger.debug("Ignored manuscripts: {im}".format(im=blanks))
         verse = verse[:-2]
     for blank in blanks:
-        manuscripts.remove(blank)
+        manuscripts.pop(blank)
 
     words = []
 
+    # Produce a first pass of the manuscripts
     for word in verse:
+        logger.debug("Unparsed word: {wrd}".format(wrd=word))
         readings = [parse_group(reading) for reading in word if len(parse_group(reading)) > 0  ]
         words.append(readings)
 
+    # Compute the set of manuscripts that were not included
     for word in words:
-        ms_stack = manuscripts.copy()
+        ms_stack = list(manuscripts.keys())
         for reading in word:
             for elem in reading:
-                if is_normal.match(elem) == None:
-                    if is_special.match(elem) == None:
-                        raise SyntaxError('Bad manuscript: {man}'.format(man=elem))
-                    else:
-                        base_manuscript = elem[:-1]
-                        modifier = elem[-1]
-                        if base_manuscript not in manuscripts:
-                            raise LookupError('Unknown manuscript: {man}'.format(man=elem))
-                        ms_stack.remove(base_manuscript)
-                        pair_manuscript = base_manuscript + pair[modifier]
-                        ms_stack.add(pair_manuscript)
-                else:
-                    ms_stack.remove(elem)
-        word.append(list(ms_stack))
-    return words        
+                if is_special.match(elem) == None:
+                    raise SyntaxError('Normal and malformed manuscripts should have been removed by now. {man}'.format(man=elem))
+                if elem not in manuscripts:
+                    raise LookupError('Unknown manuscript: {man}'.format(man=elem))
+                ms_stack.remove(elem)
+        logger.debug("Remaining manuscripts in ms_stack: {rm}".format(rm=ms_stack))
+        for remainder in ms_stack:
+            logger.debug("Remainder: {rd}".format(rd=remainder))
+            if get_pair(remainder) not in ms_stack: 
+                logger.debug("\tPair not in ms_stack: {rd}".format(rd=remainder))
+                word[-1].append(remainder)
+            else:
+                logger.debug("\tPair in ms_stack: {rd}".format(rd=remainder))
+                base_manuscript = remainder[:-1]
+                ms_stack.remove(get_pair(remainder))
+                d_remainder = get_default(remainder)
+                d_modifier = d_remainder[-1]
+                logger.debug("\tDefault remainder: {drd}".format(drd=d_remainder))
+                c_default_variants = default_variants.copy()
+                logger.debug("\tList of defaults: {ds}".format(ds=c_default_variants))
+                c_default_variants.remove(d_modifier)
+                success = False
+                for dvar in c_default_variants:
+                    if success:
+                        break
+                    search_for = base_manuscript + dvar
+                    if base_manuscript + dvar not in ms_stack:
+                        for reading in word:
+                            if search_for in reading:
+                                reading.append(remainder)
+                                reading.append(get_pair(remainder))
+                                success = True
+                                break
+                if not success:
+                    word[-1].append(remainder)
+                    word[-1].append(get_pair(remainder))
+        logger.debug("Parsed word: {wrd}".format(wrd=word))
 
 
+    sanity_check(words, manuscripts)
+    return words
+
+def sanity_check(words, manuscripts):
+    for word in words:
+        ms_stack = list(manuscripts.keys())
+        for reading in word:
+            for manuscript in reading:
+                ms_stack.remove(manuscript)
+        assert(len(ms_stack) == 0)
+
+
+def get_pair(variant):
+    base_manuscript = variant[:-1]
+    modifier = variant[-1]
+    return base_manuscript + pair[modifier]
+
+def get_default(variant):
+    modifier = variant[-1]
+    if modifier in default_variants:
+        return variant
+    else:
+        return variant[:-1] + pair[modifier]
+
+
+#Takes a filename and returns the list of manuscripts on the first line of the file.
 def parse_manuscripts(filename):
     ms = []
     with open(filename, 'r') as cr:
         i = csv.reader(cr, delimiter=',', quotechar='"')
         for row in i:
             ms.append(row)
-    return set(ms[0])
+    logger.debug("Unparsed manuscripts: {ums}".format(ums=set(ms[0])))
+    filtered_ums = list(set(ms[0]))
+    filtered_ums.sort()
+    for ms in filtered_ums:
+        if is_special.match(ms) != None:
+            raise SyntaxError("Input manuscripts should be undecorated: {ms}".format(ms=ms))
+    dms = []
+    for ms in filtered_ums:
+        for variant in variants:
+            dms.append(ms + variant)
+    logger.debug("Decorated manuscripts: {dms}".format(dms=dms))
+    return index_manuscripts(dms)
+
+
+def index_manuscripts(manuscripts):
+    return dict(zip(manuscripts, natural_numbers_0()))
 
 
 def ms_order(man):
@@ -68,15 +166,9 @@ def ms_order(man):
     else:
         return int(man[:-1])*no_of_variants+variants.index(man[-1])+1
 
-def build_table(words):
-    manuscripts = set()
-    for a in words:
-        for b in a:
-            for c in b:
-                manuscripts.add(c)
-    m_list = list(manuscripts)
-    m_list.sort(key=ms_order)
-    table = [[[0 for x in m_list] for y in m_list] for z in words]
+#Takes the number of manuscripts, a depth, and the additive identity, and returns a table of dimensions `|manuscripts| X |manuscripts| X depth` filled with the additive identity
+def build_table(no_of_manuscripts, depth, add_id):
+    table = [[[add_id for x in range(no_of_manuscripts)] for y in range(no_of_manuscripts)] for z in range(depth)]
     return table
 
 def natural_numbers_0():
@@ -89,11 +181,13 @@ def natural_numbers_0():
 def populate_table(table, oms,  words):
     for (word_i, word) in zip(natural_numbers_0(), words):
         for group in word:
-            cgroup = group.copy()
-            cgroup.sort(key=ms_order)
-            for i in range(0, len(cgroup)):
-                for j in range(i, len(cgroup)):
-                    table[word_i][oms.index(cgroup[i])][oms.index(cgroup[j])] += 1
+            for i in range(0, len(group)):
+                i_index = oms[group[i]]
+                for j in range(i, len(group)):
+                    j_index = oms[group[j]]
+                    x_index = max(i_index, j_index)
+                    y_index = min(i_index, j_index)
+                    table[word_i][x_index][y_index] += 1
     return table
 
 def project_table(table):
@@ -102,3 +196,36 @@ def project_table(table):
 
 def update_table(table, word):
     pass
+    for reading in word:
+        cread = reading.copy()
+        cread.sort(key=ms_order)
+
+def k_order(edge):
+    return edge[2]
+
+def kruskals(p_table, manuscripts):
+    edges = [(x, y, p_table[x][y]) for y in range(len(p_table)) for x in range(y)]
+    edges.sort(key=k_order)
+    ss = [set([x]) for x in range(len(p_table))]
+    tree = []
+
+    for edge in edges:
+        found_s0 = False
+        found_s1 = False
+        if len(ss) == 1:
+            break
+        for s in ss:
+            if edge[0] in s:
+                s0 = s
+                found_s0 = True
+            if edge[1] in s:
+                s1 = s
+                found_s1 = True
+            if found_s0 and found_s1:
+                break
+        if s0 != s1:
+            tree.append(edge)
+            ss.remove(s0)
+            ss.remove(s1)
+            ss.append(s0.union(s1))
+    return tree
