@@ -1,6 +1,9 @@
 import csv
 import re
 import logging
+from graphviz import Graph
+from os import listdir
+from os.path import isfile, join
 logger = logging.getLogger('default')
 
 # Possible variant types of manuscripts
@@ -46,7 +49,8 @@ def parse_verse(filename, manuscripts):
     with open(filename, 'r') as cr:
         i = csv.reader(cr, delimiter='/', quotechar='"')
         for row in i:
-            verse.append(row)
+            if len(row) != 0:
+                verse.append(row)
 
     # Remove the list of manuscripts to ignore.
     blanks = []
@@ -63,6 +67,9 @@ def parse_verse(filename, manuscripts):
     # Produce a first pass of the manuscripts
     for word in verse:
         logger.debug("Unparsed word: {wrd}".format(wrd=word))
+        if len(word) == 0:
+            logger.warning("Dropping empty word. All empty lines should have been dropped by this point.")
+            break
         readings = [parse_group(reading) for reading in word if len(parse_group(reading)) > 0  ]
         words.append(readings)
 
@@ -161,6 +168,7 @@ def index_manuscripts(manuscripts):
 
 
 def ms_order(man):
+    logger.warning('{man}'.format(man=man))
     if is_special.match(man) == None:
         return int(man)*no_of_variants
     else:
@@ -180,14 +188,20 @@ def natural_numbers_0():
 
 def populate_table(table, oms,  words):
     for (word_i, word) in zip(natural_numbers_0(), words):
-        for group in word:
-            for i in range(0, len(group)):
-                i_index = oms[group[i]]
-                for j in range(i, len(group)):
-                    j_index = oms[group[j]]
-                    x_index = max(i_index, j_index)
-                    y_index = min(i_index, j_index)
-                    table[word_i][x_index][y_index] += 1
+        for reading in word:
+            for (i_index, m_i) in zip(natural_numbers_0(), reading):
+                logger.debug('i_index, i: {i_index}, {i}'.format(i_index=i_index, i=m_i))
+                for j_index in range(i_index, len(reading)):
+                    m_j = reading[j_index]
+                    logger.debug('j_index, j: {j_index}, {j}'.format(j_index=j_index, j=m_j))
+                    x_index = max(oms[m_i], oms[m_j])
+                    y_index = min(oms[m_i], oms[m_j])
+                    try:
+                        table[word_i][x_index][y_index] += 1
+                    except IndexError:
+                        logger.warning('IndexError in table: {i}, {x}, {y}'.format(i=word_i, x=x_index, y=y_index))
+                        raise IndexError
+
     return table
 
 def project_table(table):
@@ -201,7 +215,7 @@ def update_table(table, word):
         cread.sort(key=ms_order)
 
 def k_order(edge):
-    return edge[2]
+    return 1/(edge[2]+0.00001)
 
 def kruskals(p_table, manuscripts):
     edges = [(x, y, p_table[x][y]) for y in range(len(p_table)) for x in range(y)]
@@ -229,3 +243,41 @@ def kruskals(p_table, manuscripts):
             ss.remove(s1)
             ss.append(s0.union(s1))
     return tree
+
+def draw_tree(tree, manuscripts):
+    g = Graph(name="Tree")
+
+    for manuscript,number in manuscripts.items():
+        g.node('m{n}'.format(n=number), manuscript)
+    for edge in tree:
+        g.edge('m{a}'.format(a=edge[0]), 'm{b}'.format(b=edge[1]))
+
+    g.format = 'png'
+
+    g.render('out', view=True)
+
+def get_files(path):
+    return [f for f in listdir(path) if isfile(join(path, f))]
+
+def do_run(manuscript_path, verses_path):
+    ms = parse_manuscripts(manuscript_path)
+    verse_files = get_files(verses_path)
+    verses = []
+    for f in verse_files:
+        verses.append(parse_verse(join(verses_path, f), ms.copy()))
+
+    chapter_len = sum(map(len, verses))
+
+    t = build_table(len(ms), chapter_len, 0)
+
+    counter = 0
+    for verse in verses:
+        logger.warning(counter)
+        populate_table(t[counter:counter+len(verse)],ms,  verse)
+        counter += len(verse)
+
+    p_table = project_table(t)
+
+    tree = kruskals(p_table, ms)
+
+    draw_tree(tree, ms)
