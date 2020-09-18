@@ -8,7 +8,7 @@ logger = logging.getLogger('default')
 
 # Possible variant types of manuscripts
 variants = ['*', 'm', 'a', '°']
-no_of_variants = len(variants)+1
+no_of_variants = len(variants)
 pair = {'*':'m','m':'*','a':'°', '°':'a'}
 
 # The variant type that of each pair that indicates no change / the original text
@@ -17,7 +17,7 @@ default_variants = ['*', '°']
 is_normal = re.compile('^[0-9]+$')
 is_special = re.compile('^[0-9]+[m\*a°]$')
 
-def parse_group(group):
+def parse_group(group, actuals):
     # Require each group to be in the correct format
     patt = re.compile('^\s*(([0-9]+[am°\*]?\s*,\s*)*[0-9]+[am°\*]?)?\s*$')
     if patt.match(group) == None:
@@ -33,10 +33,13 @@ def parse_group(group):
     first_pass = []
     for manuscript in literal:
         if is_normal.match(manuscript) != None:
+            actuals.add(manuscript + '*')
             # An undecorated manuscript number indicates that all variants are in the same group.
             for variant in variants:
                 first_pass.append(manuscript + variant)
         elif is_special.match(manuscript) != None:
+            actuals.add(manuscript)
+            actuals.add(get_pair(manuscript))
             first_pass.append(manuscript)
         else:
             raise SyntaxError('Bad  manuscript: {man}'.format(man=manuscript))
@@ -44,7 +47,7 @@ def parse_group(group):
     return first_pass
 
 # parse_verse takes a filename and an ordered, decorated list of manuscripts.
-def parse_verse(filename, manuscripts):
+def parse_verse(filename, manuscripts, actuals):
     verse = []
     with open(filename, 'r') as cr:
         i = csv.reader(cr, delimiter='/', quotechar='"')
@@ -56,7 +59,7 @@ def parse_verse(filename, manuscripts):
     blanks = []
     if verse[-2] == '---' or '\'---':
         logger.debug("Manuscripts need to be ignored.")
-        blanks = parse_group(verse[-1][0])
+        blanks = parse_group(verse[-1][0], set())
         logger.debug("Ignored manuscripts: {im}".format(im=blanks))
         verse = verse[:-2]
     for blank in blanks:
@@ -70,7 +73,7 @@ def parse_verse(filename, manuscripts):
         if len(word) == 0:
             logger.warning("Dropping empty word. All empty lines should have been dropped by this point.")
             break
-        readings = [parse_group(reading) for reading in word if len(parse_group(reading)) > 0  ]
+        readings = [parse_group(reading, actuals) for reading in word if len(parse_group(reading, set())) > 0  ]
         words.append(readings)
 
     # Compute the set of manuscripts that were not included
@@ -167,13 +170,6 @@ def index_manuscripts(manuscripts):
     return dict(zip(manuscripts, natural_numbers_0()))
 
 
-def ms_order(man):
-    logger.warning('{man}'.format(man=man))
-    if is_special.match(man) == None:
-        return int(man)*no_of_variants
-    else:
-        return int(man[:-1])*no_of_variants+variants.index(man[-1])+1
-
 #Takes the number of manuscripts, a depth, and the additive identity, and returns a table of dimensions `|manuscripts| X |manuscripts| X depth` filled with the additive identity
 def build_table(no_of_manuscripts, depth, add_id):
     table = [[[add_id for x in range(no_of_manuscripts)] for y in range(no_of_manuscripts)] for z in range(depth)]
@@ -208,19 +204,22 @@ def project_table(table):
     proj = [[sum([table[x][y][z] for x in range(len(table))]) for y in range(len(table[0]))] for z in range(len(table[0][0]))]
     return proj
 
-def update_table(table, word):
-    pass
-    for reading in word:
-        cread = reading.copy()
-        cread.sort(key=ms_order)
-
 def k_order(edge):
-    return 1/(edge[2]+0.00001)
+    return -1 * edge[2]
 
-def kruskals(p_table, manuscripts):
-    edges = [(x, y, p_table[x][y]) for y in range(len(p_table)) for x in range(y)]
+def clean_edges(edges, manuscripts, actuals):
+    res = [manuscripts[n] for n in actuals]
+    return [(x, y, z) for (x, y, z) in edges if x in res and y in res]
+
+
+def kruskals(p_table, manuscripts, actuals):
+    rough_edges = [(x, y, p_table[x][y]) for x in range(len(p_table)) for y in range(x, len(p_table))]
+    logger.debug("Rough edges: {re}".format(re=len(rough_edges)))
+    edges = clean_edges(rough_edges, manuscripts, actuals)
+    logger.debug("Clean edges: {e}".format(e=len(edges)))
     edges.sort(key=k_order)
-    ss = [set([x]) for x in range(len(p_table))]
+    ss = [set([x]) for x in [manuscripts[a] for a in actuals]]
+    logger.debug("Sets: {ss}".format(ss=ss))
     tree = []
 
     for edge in edges:
@@ -247,8 +246,12 @@ def kruskals(p_table, manuscripts):
 def draw_tree(tree, manuscripts):
     g = Graph(name="Tree")
 
+    logger.debug("Manuscripts length: {ms}".format(ms=len(manuscripts)))
     for manuscript,number in manuscripts.items():
-        g.node('m{n}'.format(n=number), manuscript)
+        if manuscript[-1]=='*':
+            g.node('m{n}'.format(n=number), manuscript[:-1])
+        else:
+            g.node('m{n}'.format(n=number), manuscript)
     for edge in tree:
         g.edge('m{a}'.format(a=edge[0]), 'm{b}'.format(b=edge[1]))
 
@@ -263,21 +266,22 @@ def do_run(manuscript_path, verses_path):
     ms = parse_manuscripts(manuscript_path)
     verse_files = get_files(verses_path)
     verses = []
+    actuals = set()
     for f in verse_files:
-        verses.append(parse_verse(join(verses_path, f), ms.copy()))
-
+        verses.append(parse_verse(join(verses_path, f), ms.copy(), actuals))
+        logger.debug("Actual manuscripts: {acts}".format(acts=actuals))
     chapter_len = sum(map(len, verses))
 
     t = build_table(len(ms), chapter_len, 0)
 
     counter = 0
     for verse in verses:
-        logger.warning(counter)
+        logger.debug(counter)
         populate_table(t[counter:counter+len(verse)],ms,  verse)
         counter += len(verse)
 
     p_table = project_table(t)
-
-    tree = kruskals(p_table, ms)
-
-    draw_tree(tree, ms)
+    logger.debug("Manuscripts length: {ms}".format(ms=len(ms)))
+    tree = kruskals(p_table, ms, actuals)
+    logger.debug("Manuscripts length: {ms}".format(ms=len(ms)))
+    draw_tree(tree, {k:v for k, v in ms.items() if k in actuals})
