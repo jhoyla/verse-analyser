@@ -1,6 +1,7 @@
 import csv
 import re
 import logging
+import sys
 from graphviz import Graph
 from os import listdir
 from os.path import isfile, join
@@ -285,3 +286,10 @@ def do_run(manuscript_path, verses_path):
     tree = kruskals(p_table, ms, actuals)
     logger.debug("Manuscripts length: {ms}".format(ms=len(ms)))
     draw_tree(tree, {k:v for k, v in ms.items() if k in actuals})
+
+if __name__ == '__main__':
+    if len(sys.argv) != 3:
+        print("Usage: Path to manuscripts, path to verses")
+    else:
+        do_run(sys.argv[1], sys.argv[2])
+        
