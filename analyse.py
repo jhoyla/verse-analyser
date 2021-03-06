@@ -2,6 +2,9 @@ import csv
 import re
 import logging
 import sys
+import verseparser
+import manuscriptsparser
+from verse import Verse
 from graphviz import Graph
 from os import listdir
 from os.path import isfile, join
@@ -11,6 +14,8 @@ logger = logging.getLogger('default')
 variants = ['*', 'm', 'a', '°']
 no_of_variants = len(variants)
 pair = {'*':'m','m':'*','a':'°', '°':'a'}
+
+parser = verseparser.build()
 
 # The variant type that of each pair that indicates no change / the original text
 default_variants = ['*', '°']
@@ -46,6 +51,27 @@ def parse_group(group, actuals):
             raise SyntaxError('Bad  manuscript: {man}'.format(man=manuscript))
     logger.debug("First pass readings: {fp}".format(fp=first_pass))
     return first_pass
+
+# parse_file takes a filename and an ordered, decorated list of manuscripts, and returns a list of verses
+def parse_file(filename, manuscripts, actuals):
+    title_line = re.compile('^\s*[0-9]+,\s*[0-9]+\s*,[0-9]+,\s*[0-9]+\s*$')
+    
+    lines = []
+
+    with open(filename, 'r') as cr:
+        for row in cr:
+            if len(row) != 0:
+                lines.append(row)
+
+
+    verses = []
+    verse = []
+    state_machine = 'a'
+    for line in lines:
+        if line == '===':
+            if len(verse) != 0:
+                verses.append(verse)
+            verse = []
 
 # parse_verse takes a filename and an ordered, decorated list of manuscripts.
 def parse_verse(filename, manuscripts, actuals):
@@ -84,6 +110,8 @@ def parse_verse(filename, manuscripts, actuals):
             for elem in reading:
                 if is_special.match(elem) == None:
                     raise SyntaxError('Normal and malformed manuscripts should have been removed by now. {man}'.format(man=elem))
+                if elem in blanks:
+                    raise SyntaxError('Manuscript {elem} appears in a verse in which it is excluded.'.format(elem=elem))
                 if elem not in manuscripts:
                     raise LookupError('Unknown manuscript: {man}'.format(man=elem))
                 ms_stack.remove(elem)
