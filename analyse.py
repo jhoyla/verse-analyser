@@ -84,6 +84,8 @@ def parse_verse(filename, manuscripts, actuals):
             for elem in reading:
                 if is_special.match(elem) == None:
                     raise SyntaxError('Normal and malformed manuscripts should have been removed by now. {man}'.format(man=elem))
+                if elem in blanks:
+                    raise SyntaxError('Manuscript {elem} appears in a verse in which it is excluded.'.format(elem=elem))
                 if elem not in manuscripts:
                     raise LookupError('Unknown manuscript: {man}'.format(man=elem))
                 ms_stack.remove(elem)
