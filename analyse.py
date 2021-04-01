@@ -319,7 +319,8 @@ def get_actuals(manuscripts, verses):
     # Merge all sets of decorations
     res = reduce(__merge__, [v.decorations for v in verses], dict())
     for m in manuscripts:
-        res.setdefault(m, set())
+        res.setdefault(m, set('*'))
+
     return res
 
 def __merge__(a,b):
@@ -334,6 +335,18 @@ def __merge__(a,b):
     for x in bk:
         res[x] = b[x]
     return res
+
+def get_ordered_manuscripts(manuscripts):
+    oms = []
+    for m in manuscripts:
+        if is_special.match(m) != None:
+            raise SyntaxError("Manuscript should be undecorated: {m}".format(m=m))
+        for v in variants:
+            oms.append(m + v)
+
+    oms.sort()
+
+    return oms
 
 def do_run(manuscript_path, verses_path):
     man_parser, verse_parser = init_parsers()
@@ -353,20 +366,22 @@ def do_run(manuscript_path, verses_path):
 
     chapter_len = sum([len(x.words) for x in verses])
 
-    t = build_table(len(ms), chapter_len, 0)
+    oms = get_ordered_manuscripts(ms)
+
+    t = build_table(len(oms), chapter_len, 0)
 
     counter = 0
     for verse in verses:
         logger.debug(counter)
-        populate_table(t[counter:counter+len(verse.words)],ms,  verse.words)
+        populate_table(t[counter:counter+len(verse.words)], oms, verse.words)
         counter += len(verse.words)
 
     p_table = project_table(t)
-    logger.debug("Manuscripts length: {ms}".format(ms=len(ms)))
+    logger.debug("Manuscripts length: {ms}".format(ms=len(oms)))
     actuals = get_actuals(ms, verses)
     tree = kruskals(p_table, ms, actuals)
-    logger.debug("Manuscripts length: {ms}".format(ms=len(ms)))
-    draw_tree(tree, {k:v for k, v in ms.items() if k in actuals})
+    logger.debug("Manuscripts length: {ms}".format(ms=len(oms)))
+    draw_tree(tree, {k:v for k, v in oms.items() if k in actuals})
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
