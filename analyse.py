@@ -2,12 +2,13 @@ import csv
 import re
 import logging
 import sys
-import verseparser
-import manuscriptsparser
+import verselex, verseparser
+import manuscriptslex, manuscriptsparser
 from verse import Verse
 from graphviz import Graph
 from os import listdir
 from os.path import isfile, join
+from functools import reduce
 logger = logging.getLogger('default')
 
 # Possible variant types of manuscripts
@@ -219,14 +220,26 @@ def populate_table(table, oms,  words):
                 for j_index in range(i_index, len(reading)):
                     m_j = reading[j_index]
                     logger.debug('j_index, j: {j_index}, {j}'.format(j_index=j_index, j=m_j))
-                    x_index = max(oms[m_i], oms[m_j])
-                    y_index = min(oms[m_i], oms[m_j])
-                    try:
-                        table[word_i][x_index][y_index] += 1
-                    except IndexError:
-                        logger.warning('IndexError in table: {i}, {x}, {y}'.format(i=word_i, x=x_index, y=y_index))
-                        raise IndexError
 
+                    exp_mi = []
+                    if is_special.match(m_i) == None:
+                        exp_mi = ['{base}{dec}'.format(base=m_i, dec=x) for x in variants]
+                    else:
+                        exp_mi = [m_i]
+
+                    exp_mj = []
+                    if is_special.match(m_j) == None:
+                        exp_mj = ['{base}{dec}'.format(base=m_j, dec=x) for x in variants]
+                    else:
+                        exp_mj = [m_j]
+
+                    updates = [(max(oms[x],oms[y]), min(oms[x], oms[y])) for x in exp_mi for y in exp_mj] 
+                    for x,y in updates:
+                        try:
+                            table[word_i][x][y] += 1
+                        except IndexError:
+                            logger.warning('IndexError in table: {i}, {x}, {y}'.format(i=word_i, x=x_index, y=y_index))
+                            raise IndexError
     return table
 
 def project_table(table):
@@ -291,26 +304,66 @@ def draw_tree(tree, manuscripts):
 def get_files(path):
     return [f for f in listdir(path) if isfile(join(path, f))]
 
+def init_parsers():
+    man_lexer = manuscriptslex.ManuscriptsLexer()
+    man_lexer.build()
+
+    man_parser = manuscriptsparser.build()
+
+    verse_lexer = verselex.VersesLexer()
+    verse_lexer.build()
+    verse_parser = verseparser.build()
+    return man_parser, verse_parser
+
+def get_actuals(manuscripts, verses):
+    # Merge all sets of decorations
+    res = reduce(__merge__, [v.decorations for v in verses], dict())
+    for m in manuscripts:
+        res.setdefault(m, set())
+    return res
+
+def __merge__(a,b):
+    res = {}
+    bk = b.keys()
+    for x in a.keys():
+        if x in b.keys():
+            res[x] = a[x].union(b[x])
+            bk.remove(x)
+        else:
+            res[x] = a[x]
+    for x in bk:
+        res[x] = b[x]
+    return res
+
 def do_run(manuscript_path, verses_path):
-    ms = parse_manuscripts(manuscript_path)
+    man_parser, verse_parser = init_parsers()
+    with open(manuscript_path, 'r') as fd: 
+        man_str = fd.read()
+
+    ms = man_parser.parse(man_str)
+
     verse_files = get_files(verses_path)
-    verses = []
-    actuals = set()
+    verse_strs = []
     for f in verse_files:
-        verses.append(parse_verse(join(verses_path, f), ms.copy(), actuals))
-        logger.debug("Actual manuscripts: {acts}".format(acts=actuals))
-    chapter_len = sum(map(len, verses))
+        with open(join(verses_path, f), 'r') as fd:
+            verse_strs.append(fd.read)
+
+    p_verses = [verse_parser.parse(x) for x in verse_strs]
+    verses = [Verse(x[0], x[1], x[2], ms) for x in p_verses] 
+
+    chapter_len = sum([len(x.words) for x in verses])
 
     t = build_table(len(ms), chapter_len, 0)
 
     counter = 0
     for verse in verses:
         logger.debug(counter)
-        populate_table(t[counter:counter+len(verse)],ms,  verse)
-        counter += len(verse)
+        populate_table(t[counter:counter+len(verse.words)],ms,  verse.words)
+        counter += len(verse.words)
 
     p_table = project_table(t)
     logger.debug("Manuscripts length: {ms}".format(ms=len(ms)))
+    actuals = get_actuals(ms, verses)
     tree = kruskals(p_table, ms, actuals)
     logger.debug("Manuscripts length: {ms}".format(ms=len(ms)))
     draw_tree(tree, {k:v for k, v in ms.items() if k in actuals})
