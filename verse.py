@@ -53,7 +53,7 @@ class Verse(object):
 
 
     def complete_readings(self, manuscripts):
-        for word in self.__words__:
+        for word in self.__owords__:
             # Build strike list of manuscripts
             ms_set = set(manuscripts)
             # First expand any unexpanded manuscripts
@@ -75,8 +75,8 @@ class Verse(object):
 
             dms_set = self.decorated_manuscripts.copy()
             # Then build a list of missing manuscripts
-            print("dms_set: {dm}".format(dm=dms_set))
-            print("word: {word}".format(word=word))
+            logger.debug("dms_set: {dm}".format(dm=dms_set))
+            logger.debug("word: {word}".format(word=word))
             for x in range(len(word)):
                 ys = range(len(word[x]))
                 for y in ys:
