@@ -145,9 +145,16 @@ def init_parsers():
 
 def get_actuals(manuscripts, verses):
     # Merge all sets of decorations
+    for v in verses:
+        logger.debug("Verse: {d}".format(d=v.decorations))
     res = reduce(__merge__, [v.decorations for v in verses], dict())
-    for m in manuscripts:
-        res.setdefault(m, set('*'))
+
+    logger.debug(res.keys())
+
+    for m,d in res.items():
+        d.add('*')
+
+    logger.debug("Manuscripts: {m}".format(m=manuscripts))
 
     out = []
     for x in res.keys():

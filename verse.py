@@ -80,7 +80,11 @@ class Verse(object):
             for x in range(len(word)):
                 ys = range(len(word[x]))
                 for y in ys:
-                    dms_set.remove(word[x][y])
+                    try:
+                        dms_set.remove(word[x][y])
+                    except ValueError:
+                        logger.error("Ch{ch} v{v} word {x} reading {y} ({ms}) not in DMS.".format(ch=self.chapter, v=self.verse, x=x, y=y, ms=word[x][y]))
+                        raise ValueError
 
 
             if len(word) == 0:
