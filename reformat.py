@@ -28,7 +28,7 @@ def reformat(in_file, out_file, corpus):
 
     new_string = '===\n{chapter} {verse} {segment} {corpus}\n%%%\n{contents}\n'.format(chapter=chapter,verse=verse,segment=segment,corpus=corpus,contents=ss)
 
-    with open(out_file, 'w') as fd:
+    with open(out_file, 'a') as fd:
         fd.write(new_string)
 
 
@@ -37,6 +37,7 @@ if __name__ == '__main__':
     parser.add_argument('input_folder', metavar='input_folder', type=str, help='The folder with the old format verses.')
     parser.add_argument('output_folder', metavar='output_folder', type=str, help='The folder for the new format verses.')
     parser.add_argument('--corpus', nargs=1, default=1, type=int, help='The corpus these verses belong to. Default is 1.')
+    parser.add_argument('--merge', nargs=1, type=str, default='', help='Merge all input files into a single file, with the given name.')
 
     args = parser.parse_args()
     input_folder = args.input_folder
@@ -51,6 +52,13 @@ if __name__ == '__main__':
     
     for fn in os.scandir(input_folder):
         bn = path.basename(fn)
-        of = path.join(output_folder, bn)
 
-        reformat(fn, of, corpus)
+        print(args.merge)
+        merge = args.merge[0]
+        if args.merge == '':
+            of = path.join(output_folder, bn)
+            reformat(fn, of, corpus)
+        else:
+            of = path.join(output_folder, merge)
+            reformat(fn, of, corpus)
+
