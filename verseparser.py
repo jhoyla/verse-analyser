@@ -67,7 +67,7 @@ def p_exclusions(p):
 
 
 def p_error(p):
-    print("Syntax error in input!")
+    print("Syntax error in input! \n {s}".format(**{'s':p}))
 
 def build():
     parser = yacc.yacc()
