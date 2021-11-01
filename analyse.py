@@ -63,8 +63,14 @@ def populate_table(table, oms,  words):
                             raise IndexError
     return table
 
-def project_table(table):
+def project_table(table, manuscripts):
     proj = [[sum([table[x][y][z] for x in range(len(table))]) for y in range(len(table[0]))] for z in range(len(table[0][0]))]
+    with open('array_proj.csv', 'w') as fd:
+        writer = csv.writer(fd)
+        writer.writerow(manuscripts)
+        for row in proj:
+            writer.writerow(row)
+
     return proj
 
 def k_order(edge):
@@ -212,7 +218,7 @@ def do_run(manuscript_path, verses_path):
         populate_table(t[counter:counter+len(verse.words)], ioms, verse.words)
         counter += len(verse.words)
 
-    p_table = project_table(t)
+    p_table = project_table(t, ioms)
     logger.debug("Manuscripts length: {ms}".format(ms=len(ioms)))
     actuals = get_actuals(ms, verses)
     tree = kruskals(p_table, ioms, actuals)
