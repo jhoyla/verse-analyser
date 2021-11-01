@@ -12,20 +12,20 @@ from functools import reduce
 logger = logging.getLogger('default')
 
 # Possible variant types of manuscripts
-variants = ['*', 'm', 'a', '°']
+variants = ['*', 'm', 'a', 'o']
 no_of_variants = len(variants)
-pair = {'*':'m','m':'*','a':'°', '°':'a'}
+pair = {'*':'m','m':'*','a':'o', 'o':'a'}
 
 parser = verseparser.build()
 
 # The variant type that of each pair that indicates no change / the original text
-default_variants = ['*', '°']
+default_variants = ['*', 'o']
 
 is_normal = re.compile('^[0-9]+$')
-is_special = re.compile('^[0-9]+[m\*a°]$')
+is_special = re.compile('^[0-9]+[m\*ao]$')
 
 def index_manuscripts(manuscripts):
-    return dict(zip(manuscripts, natural_numbers_0()))
+    return {k:v for v,k in enumerate(manuscripts)}
 
 
 #Takes the number of manuscripts, a depth, and the additive identity, and returns a table of dimensions `|manuscripts| X |manuscripts| X depth` filled with the additive identity
@@ -33,17 +33,10 @@ def build_table(no_of_manuscripts, depth, add_id):
     table = [[[add_id for x in range(no_of_manuscripts)] for y in range(no_of_manuscripts)] for z in range(depth)]
     return table
 
-def natural_numbers_0():
-    num = 0
-    while True:
-        yield num
-        num += 1
-
-
 def populate_table(table, oms,  words):
-    for (word_i, word) in zip(natural_numbers_0(), words):
+    for (word_i, word) in enumerate(words):
         for reading in word:
-            for (i_index, m_i) in zip(natural_numbers_0(), reading):
+            for (i_index, m_i) in enumerate(reading):
                 logger.debug('i_index, i: {i_index}, {i}'.format(i_index=i_index, i=m_i))
                 for j_index in range(i_index, len(reading)):
                     m_j = reading[j_index]
@@ -125,7 +118,7 @@ def draw_tree(tree, manuscripts):
     for edge in tree:
         g.edge('m{a}'.format(a=edge[0]), 'm{b}'.format(b=edge[1]))
 
-    g.format = 'png'
+    g.format = 'svg'
 
     g.render('out', view=True)
 

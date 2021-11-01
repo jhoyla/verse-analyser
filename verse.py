@@ -7,8 +7,8 @@ import manuscriptsparser
 import verse as v
 logger = logging.getLogger('default')
 
-is_special = re.compile('^[0-9]+[m\*a°]$')
-pair = {'*':'m','m':'*','a':'°', '°':'a'}
+is_special = re.compile('^[0-9]+[m\*ao]$')
+pair = {'*':'m','m':'*','a':'o', 'o':'a'}
 
 
 def test(input_file, manuscript_file):

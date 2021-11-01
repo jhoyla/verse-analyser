@@ -4,7 +4,7 @@ class ManuscriptsLexer(object):
     tokens = ['MANUSCRIPT', 'COMMA', 'NEW_LINE']
 
     def t_MANUSCRIPT(self, t):
-        r"\d+[°ma*]?"
+        r"\d+[oma*]?"
         return t
 
     def t_NEW_LINE(self, t):

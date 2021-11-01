@@ -20,7 +20,7 @@ class VersesLexer(object):
     t_ANY_EXCL_SEP = r"---"
     t_ANY_COMMA = r","
     def t_body_MANUSCRIPT(self, t):
-        r"\d+[°ma*]?"
+        r"\d+[oma*]?"
         return t
 
     t_ANY_SLASH = r"/"

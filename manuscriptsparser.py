@@ -16,7 +16,7 @@ def p_man_list(p):
         p[0] = [p[1]] + p[3]
 
 def p_error(p):
-    print("Syntax error in input")
+    print("Syntax error in manuscripts input")
 
 
 def build():
