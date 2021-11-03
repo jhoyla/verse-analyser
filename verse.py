@@ -35,7 +35,7 @@ def test(input_file, manuscript_file):
 
     verse = v.Verse(verse_p[0], verse_p[1], verse_p[2], ms)
     return verse
-    
+
 
 class Verse(object):
     def __init__(self, title, words, exclusions, manuscripts):
@@ -51,51 +51,52 @@ class Verse(object):
         self.decorated_manuscripts = self.get_decorated_manuscripts()
         self.complete_readings(manuscripts)
 
+    def validate_data(self):
+        pass
+
 
     def complete_readings(self, manuscripts):
+        # For each word
         for word in self.__owords__:
-            # Build strike list of manuscripts
-            ms_set = set(manuscripts)
-            # First expand any unexpanded manuscripts
-            #x is the reading
-            for x in range(len(word)):
-                #y is the manuscript
-                ys = range(len(word[x]))
-                for y in ys:
+            # For each reading
+            for x, reading in enumerate(word):
+                # Build strike list of manuscripts
+                ms_set = set(manuscripts)
+                # For each manuscript
+                for y, manuscript in enumerate(reading):
                     # if manuscript is undecorated
-                    if is_special.match(word[x][y]) == None:
-                        # and the manuscript should be then
-                        if len(self.decorations.setdefault(word[x][y], set())) != 0:
-                            # Remove the undecorated manuscript
-                            base = word[x].pop(y)
-                            # and replace it with all possible decorations.
-                            for dec in self.decorations[base]:
-                                word[x].append("{b}{d}".format(b=base,d=dec))
-
-
-            dms_set = self.decorated_manuscripts.copy()
-            # Then build a list of missing manuscripts
-            logger.debug("dms_set: {dm}".format(dm=dms_set))
-            logger.debug("word: {word}".format(word=word))
-            for x in range(len(word)):
-                ys = range(len(word[x]))
-                for y in ys:
-                    try:
-                        dms_set.remove(word[x][y])
-                    except ValueError:
-                        logger.error("Ch{ch} v{v} word {x} reading {y} ({ms}) not in DMS.".format(ch=self.chapter, v=self.verse, x=x, y=y, ms=word[x][y]))
-                        raise ValueError
-
+                    if is_special.match(manuscript) == None:
+                        # remove the manuscript from the strike list
+                        try:
+                            ms_set.remove(manuscript)
+                        except ValueError:
+                            logger.error("Manuscript {m} is not in the strike list".format(m=manuscript))
+                    # Otherwise
+                    else:
+                        # If the decorated manuscript is not in the list
+                        if manuscript not in ms_set:
+                            # Add its pair to the list of manuscripts
+                            ms_set.add(self.get_pair(manuscript))
+                            # And try to remove the undecorated manuscript
+                            try:
+                                ms_set.remove(manuscript[:-1])
+                            except:
+                                logger.error("Neither {m} nor {dm} is in the strike list".format(m=manuscript[:-1], dm=manuscript))
+                        # If the decorated manuscript is already in the manuscript list
+                        else:
+                                # Its pair must have already been added. Remove it.
+                                ms_set.remove(manuscript)                    
 
             if len(word) == 0:
                 logger.error("No words")
-            logger.debug("ms_list: {ms_list}".format(ms_list=list(dms_set)))
+            logger.debug("ms_list: {ms_list}".format(ms_list=list(ms_set)))
 
-            # And attach it to the end.
             if len(word[-1]) == 0:
-                word[-1] = list(dms_set)
-            elif len(ms_set) > 0:
-                word.append(list(dms_set))
+                word[-1]= list(ms_set)
+            else:
+                word.append(list(ms_set))
+
+
 
 
     def get_decorated_manuscripts(self):
@@ -123,7 +124,7 @@ class Verse(object):
 
         # Merge the two sets
         full = list(decorated.union(extras))
-        
+
         # Create a dictionary mapping manuscripts to the list of decorations
         dec_table = {}
         for manuscript in full:
@@ -134,7 +135,7 @@ class Verse(object):
             dec_table[base].add(decoration)
 
         return dec_table
-    
+
 
 
     def get_pair(self, variant):
