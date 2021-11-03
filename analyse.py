@@ -2,6 +2,7 @@ import csv
 import re
 import logging
 import sys
+import itertools
 import verselex, verseparser
 import manuscriptslex, manuscriptsparser
 from verse import Verse
@@ -65,11 +66,12 @@ def populate_table(table, oms,  words):
 
 def project_table(table, manuscripts):
     proj = [[sum([table[x][y][z] for x in range(len(table))]) for y in range(len(table[0]))] for z in range(len(table[0][0]))]
+    
     with open('array_proj.csv', 'w') as fd:
         writer = csv.writer(fd)
-        writer.writerow(manuscripts)
-        for row in proj:
-            writer.writerow(row)
+        writer.writerow(itertools.chain(['-'], manuscripts.values()))
+        for i, row in enumerate(proj):
+            writer.writerow(itertools.chain([manuscripts[i]],row))
 
     return proj
 
@@ -183,7 +185,7 @@ def get_ordered_manuscripts(manuscripts):
         for v in variants:
             oms.append(m + v)
 
-    oms.sort()
+    oms.sort(key=lambda x: (int(x[:-1])*10)+variants.index(x[-1]))
     ioms = index_manuscripts(oms)
     return ioms
 
@@ -209,7 +211,7 @@ def do_run(manuscript_path, verses_path):
     chapter_len = sum([len(x.words) for x in verses])
 
     ioms = get_ordered_manuscripts(ms)
-
+    oms = {v:k for k,v in ioms.items()}
     t = build_table(len(ioms), chapter_len, 0)
 
     counter = 0
@@ -218,7 +220,7 @@ def do_run(manuscript_path, verses_path):
         populate_table(t[counter:counter+len(verse.words)], ioms, verse.words)
         counter += len(verse.words)
 
-    p_table = project_table(t, ioms)
+    p_table = project_table(t, oms)
     logger.debug("Manuscripts length: {ms}".format(ms=len(ioms)))
     actuals = get_actuals(ms, verses)
     tree = kruskals(p_table, ioms, actuals)
