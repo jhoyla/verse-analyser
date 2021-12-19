@@ -25,6 +25,12 @@ default_variants = ['*', 'o']
 is_normal = re.compile('^[0-9]+$')
 is_special = re.compile('^[0-9]+[m\*ao]$')
 
+def get_base(m):
+    if is_special.match(m) == None:
+        return m
+    else:
+        return m[:-1]
+
 def index_manuscripts(manuscripts):
     return {k:v for v,k in enumerate(manuscripts)}
 
@@ -34,13 +40,17 @@ def build_table(no_of_manuscripts, depth, add_id):
     table = [[[add_id for x in range(no_of_manuscripts)] for y in range(no_of_manuscripts)] for z in range(depth)]
     return table
 
-def populate_table(table, oms,  words):
+def populate_table(table, oms,  words, exclusions):
     for (word_i, word) in enumerate(words):
         for reading in word:
             for (i_index, m_i) in enumerate(reading):
+                if get_base(m_i) in exclusions:
+                    continue
                 logger.debug('i_index, i: {i_index}, {i}'.format(i_index=i_index, i=m_i))
                 for j_index in range(i_index, len(reading)):
                     m_j = reading[j_index]
+                    if get_base(m_j) in exclusions:
+                        continue
                     logger.debug('j_index, j: {j_index}, {j}'.format(j_index=j_index, j=m_j))
 
                     exp_mi = []
@@ -55,7 +65,7 @@ def populate_table(table, oms,  words):
                     else:
                         exp_mj = [m_j]
 
-                    updates = [(max(oms[x],oms[y]), min(oms[x], oms[y])) for x in exp_mi for y in exp_mj] 
+                    updates = [(oms[x], oms[y]) for x in exp_mi for y in exp_mj if oms[x] <= oms[y]] 
                     for x,y in updates:
                         try:
                             table[word_i][x][y] += 1
@@ -84,7 +94,7 @@ def clean_edges(edges, manuscripts, actuals):
 
 
 def kruskals(p_table, manuscripts, actuals):
-    rough_edges = [(x, y, p_table[x][y]) for x in range(len(p_table)) for y in range(x, len(p_table))]
+    rough_edges = [(x, y, p_table[x][y]) for x in range(len(p_table)) for y in range(len(p_table)) if p_table[x][y] != 0]
     logger.debug("Rough edges: {re}".format(re=len(rough_edges)))
     edges = clean_edges(rough_edges, manuscripts, actuals)
     logger.debug("Clean edges: {e}".format(e=len(edges)))
@@ -217,7 +227,7 @@ def do_run(manuscript_path, verses_path):
     counter = 0
     for verse in verses:
         logger.debug(counter)
-        populate_table(t[counter:counter+len(verse.words)], ioms, verse.words)
+        populate_table(t[counter:counter+len(verse.words)], ioms, verse.words, verse.exclusions)
         counter += len(verse.words)
 
     p_table = project_table(t, oms)

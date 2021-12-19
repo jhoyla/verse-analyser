@@ -1,5 +1,6 @@
 import re
 import logging
+import functools
 import verselex
 import verseparser
 import manuscriptslex
@@ -9,6 +10,8 @@ logger = logging.getLogger('default')
 
 is_special = re.compile('^[0-9]+[m\*ao]$')
 pair = {'*':'m','m':'*','a':'o', 'o':'a'}
+variants = ['*', 'm', 'a', 'o']
+others = {variant:[alt for alt in variants if alt != variant] for variant in variants}
 
 
 def test(input_file, manuscript_file):
@@ -75,8 +78,9 @@ class Verse(object):
                     else:
                         # If the decorated manuscript is not in the list
                         if manuscript not in ms_set:
-                            # Add its pair to the list of manuscripts
-                            ms_set.add(self.get_pair(manuscript))
+                            for alt in get_others(manuscript):
+                                # Add all possible variants to the list of manuscripts
+                                ms_set.add(alt)
                             # And try to remove the undecorated manuscript
                             try:
                                 ms_set.remove(manuscript[:-1])
@@ -84,7 +88,7 @@ class Verse(object):
                                 logger.error("Neither {m} nor {dm} is in the strike list".format(m=manuscript[:-1], dm=manuscript))
                         # If the decorated manuscript is already in the manuscript list
                         else:
-                                # Its pair must have already been added. Remove it.
+                                # Other variants have already been added. Remove this one.
                                 ms_set.remove(manuscript)                    
 
             if len(word) == 0:
@@ -130,10 +134,10 @@ class Verse(object):
         for manuscript in full:
             base = manuscript[:-1]
             decoration = manuscript[-1]
-
-            decs = dec_table.setdefault(base, set())
-            dec_table[base].add(decoration)
-
+            if base in dec_table.keys():
+                dec_table[base].add(decoration)
+            else:
+                dec_table[base] = set(decoration)
         return dec_table
 
 
@@ -144,3 +148,11 @@ class Verse(object):
         return base_manuscript + pair[modifier]
 
 
+@functools.cache
+def get_others(d_manuscript):
+    if is_special.match(d_manuscript) == None:
+        logger.error("Undecorated manuscript: {m}".format(m=d_manuscript))
+        raise (RuntimeError("Undecorated manuscript"))
+    base_manuscript = d_manuscript[:-1]
+    modifier = d_manuscript[-1]
+    return [base_manuscript + alt for alt in others[modifier]]
