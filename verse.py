@@ -89,16 +89,18 @@ class Verse(object):
                         # If the decorated manuscript is already in the manuscript list
                         else:
                                 # Other variants have already been added. Remove this one.
-                                ms_set.remove(manuscript)                    
+                                ms_set.remove(manuscript)
 
             if len(word) == 0:
                 logger.error("No words")
             logger.debug("ms_list: {ms_list}".format(ms_list=list(ms_set)))
 
+            ms_rem = list(ms_set)
+            ms_rem.sort(key=lambda x: ((int(x[:-1])*10)+variants.index(x[-1]) if is_special.match(x) != None else int(x)*10))
             if len(word[-1]) == 0:
-                word[-1]= list(ms_set)
+                word[-1] = ms_rem
             else:
-                word.append(list(ms_set))
+                word.append(ms_rem)
 
 
 
@@ -138,6 +140,15 @@ class Verse(object):
                 dec_table[base].add(decoration)
             else:
                 dec_table[base] = set(decoration)
+
+        for manuscript in manuscripts:
+            try:
+                 dec_table[manuscript]
+            except KeyError:
+                dec_table[manuscript] = set('*')
+
+        for manuscript in self.exclusions:
+            dec_table.pop(manuscript)
         return dec_table
 
 

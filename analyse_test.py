@@ -1,6 +1,5 @@
 import unittest
 import analyse
-
 class TestPopulateTable(unittest.TestCase):
     def test_empty(self):
         t = analyse.populate_table([[[]]], {}, [[[]]], [])
@@ -53,6 +52,20 @@ class TestPopulateTable(unittest.TestCase):
         ioms = {'0*': 0, '0m': 1, '0a': 2, '0o': 3, '1*': 4, '1m': 5, '1a': 6, '1o': 7}
         exclusions = []
         t = analyse.populate_table(table, ioms, [[['0','1']]], exclusions)
+        self.assertEqual(t[0][0], [1,1,1,1,1,1,1,1])
+        self.assertEqual(t[0][1], [0,1,1,1,1,1,1,1])
+        self.assertEqual(t[0][2], [0,0,1,1,1,1,1,1])
+        self.assertEqual(t[0][3], [0,0,0,1,1,1,1,1])
+        self.assertEqual(t[0][4], [0,0,0,0,1,1,1,1])
+        self.assertEqual(t[0][5], [0,0,0,0,0,1,1,1])
+        self.assertEqual(t[0][6], [0,0,0,0,0,0,1,1])
+        self.assertEqual(t[0][7], [0,0,0,0,0,0,0,1])
+
+    def test_normal_normal_ooo_match(self):
+        table = [[[0 for x in range(len(analyse.variants)*2)] for y in range(len(analyse.variants)*2)]]
+        ioms = {'0*': 0, '0m': 1, '0a': 2, '0o': 3, '1*': 4, '1m': 5, '1a': 6, '1o': 7}
+        exclusions = []
+        t = analyse.populate_table(table, ioms, [[['1','0']]], exclusions)
         self.assertEqual(t[0][0], [1,1,1,1,1,1,1,1])
         self.assertEqual(t[0][1], [0,1,1,1,1,1,1,1])
         self.assertEqual(t[0][2], [0,0,1,1,1,1,1,1])

@@ -49,6 +49,7 @@ def populate_table(table, oms,  words, exclusions):
                 logger.debug('i_index, i: {i_index}, {i}'.format(i_index=i_index, i=m_i))
                 for j_index in range(i_index, len(reading)):
                     m_j = reading[j_index]
+
                     if get_base(m_j) in exclusions:
                         continue
                     logger.debug('j_index, j: {j_index}, {j}'.format(j_index=j_index, j=m_j))
@@ -65,6 +66,10 @@ def populate_table(table, oms,  words, exclusions):
                     else:
                         exp_mj = [m_j]
 
+                    if oms[exp_mi[0]] > oms[exp_mj[0]]:
+                        logger.warning("m_i: {m_i}, m_j: {m_j}".format(m_i=exp_mi[0], m_j=exp_mj[0]))
+                        logger.error(word)
+                        raise Exception("Words out of order")
                     updates = [(oms[x], oms[y]) for x in exp_mi for y in exp_mj if oms[x] <= oms[y]] 
                     for x,y in updates:
                         try:
